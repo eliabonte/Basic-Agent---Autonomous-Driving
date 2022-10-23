@@ -23,7 +23,7 @@ add_executable(basic_agent
     )
 
 
-target_link_libraries(basic_agent agent_libn ${lib_ws32})
+target_link_libraries(basic_agent agent_lib ${lib_ws32})
 
 target_compile_options(basic_agent
         PUBLIC -DNOT_INLINED -DSERVER
