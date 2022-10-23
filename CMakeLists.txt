@@ -3,7 +3,7 @@ project(basic_agent_ST)
 
 set(CMAKE_CXX_STANDARD 11)
 # If you are on mac x86
-set(CMAKE_OSX_ARCHITECTURES x86_64)
+#set(CMAKE_OSX_ARCHITECTURES x86_64)
 
 include(lib/basic.cmake)
 
