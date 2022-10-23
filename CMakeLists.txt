@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD 11)
 include(lib/basic.cmake)
 
 include_directories(
-        #matlab/codegen/lib/primitives/
         matlab/
         lib
         log
@@ -18,16 +17,13 @@ link_directories(
 
 # ------------------------------- basic agent ------------------------------------
 add_executable(basic_agent
-        #matlab/codegen/lib/primitives/rt_nonfinite.cpp
-        #matlab/codegen/lib/primitives/primitives.cpp
-
         log/screen_print.c
         log/logvars.cc
-        strarting_point.cc
+        starting_point.cc
     )
 
 
-target_link_libraries(basic_agent agent_lib ${lib_ws32})
+target_link_libraries(basic_agent agent_libn ${lib_ws32})
 
 target_compile_options(basic_agent
         PUBLIC -DNOT_INLINED -DSERVER

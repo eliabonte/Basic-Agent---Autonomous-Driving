@@ -3,6 +3,7 @@
 //
 
 #include <stdio.h>
+#include <string.h>
 #include <math.h>
 #include <vector>
 #include <algorithm>
@@ -18,8 +19,8 @@ extern "C" {
 // #include "primitives.h"
 // --- MATLAB PRIMITIVES INCLUDE ---
 
-#define DEFAULT_SERVER_IP  "127.0.0.1"
-#define SERVER_PORT             30000  // Server port
+#define DEFAULT_SERVER_IP    "127.0.0.1"
+#define SERVER_PORT                30000  // Server port
 #define DT 0.05
 
 // Handler for CTRL-C
