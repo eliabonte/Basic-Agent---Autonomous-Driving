@@ -32,13 +32,13 @@ typedef struct __attribute__((packed)) {
   int32_t CycleNumber; /* This is an increasing number increamented at every time-step. It allow to relate the manoeuvre with the corresponding scenario */
   double ECUupTime; /* Means system up-time. It starts from zero when the simulation begins */
   int32_t Status; /* 0 = ACTIVE, 0 > Faild  (means working correctly or not), 0 < Closing */
-  double VLgtFild;
-  double ALgtFild;
+  double VLgtFild; /* Longitudinal velocity of the vehicle */
+  double ALgtFild; /* Longitudinal acceleration of the vehicle */
   double YawRateFild; /* Note that yaw-rate is the derivative of the heading, i.e. chassis rotation rate, not speed rotation rate */
   double SteerWhlAg; /* Positive when the car is turning left */
   double VehicleLen; /* Total length from front bumper to the rear bumper */
-  double VehicleWidth;
-  double RequestedCruisingSpeed;
+  double VehicleWidth;  /* Width of the vehicle */
+  double RequestedCruisingSpeed; /* Requested velocity */
   int32_t AutomationLevel; /* 0 = NO AUTOMATION, 1 = ASSISTED, 2 = PARTIAL AUTOMATION, 3 = CONDITIONAL AUTOMATION, 4 = HIGH AUTOMATION, 5 = FULL AUTOMATION, 6 = UNKNOWN  */
   int32_t CurrentLane; /* Nomenclature from ADASIS: 0 = Unknown, 1 = Emergency lane, 2 = Single-lane road, 3 = Left-most lane, 4 = Right-most lane, 5 = One of middle lanes on road with three or more lanes */
   int32_t NrObjs; /* Limited to 20 max number of objects, selection needed (if more might be limited to nearest objects) */
@@ -49,7 +49,7 @@ typedef struct __attribute__((packed)) {
   double ObjWidth[20]; /* Perpendicular to object speed direction, perpendicular to vehicle axis for stationary obstacles. 0 means unknown. */
   double ObjVel[20]; /* Speed module, not longitudinal speed */
   double ObjCourse[20]; /* In vehicle reference system, positive to the counter-clockwise */
-  double LaneWidth;
+  double LaneWidth;     /* Width of the Lane */
   double LatOffsLineR; /* positive to the left */
   double LatOffsLineL;
   double LaneHeading; /* Positive counter-clockwise  */
