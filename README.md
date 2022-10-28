@@ -49,3 +49,11 @@
 5. Run the agent
 
 ### MacOs
+1. Open a shell and run:
+   1. brew update
+   2. brew install cmake
+   3. brew install clang
+2. Open the folder project (in CLion: create Debug and Release profile);
+3. Copy from the folder lib/macos or lib/macos_x86 the communication library to the folder lib/
+4. Compile the agent
+5. Run the agent
