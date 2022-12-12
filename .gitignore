@@ -13,4 +13,6 @@ cmake-build-debug
 
 lib/libagent_lib.a
 matlab/
-Icon
+Icon
+build
+cmake-build-debug-wsl

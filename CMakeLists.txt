@@ -22,6 +22,10 @@ add_executable(basic_agent
         log/screen_print.c
         log/logvars.cc
         starting_point.cc
+        lib/MATLAB/generate_primitive/generate_primitive.c
+        lib/MATLAB/generate_primitive/rt_nonfinite.c
+        lib/MATLAB/generate_primitive/rtGetInf.c
+        lib/MATLAB/generate_primitive/rtGetNaN.c
     )
 
 
