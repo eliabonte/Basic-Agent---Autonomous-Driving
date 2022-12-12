@@ -11,7 +11,7 @@ matlab/s_opt.m
 cmake-build-release
 cmake-build-debug
 
-lib/libagent_lib.a
+
 matlab/
 Icon
 build
