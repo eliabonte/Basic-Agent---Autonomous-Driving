@@ -60,7 +60,7 @@ typedef struct __attribute__((packed)) {
   int32_t AdasisSpeedLimitNr;
   double AdasisSpeedLimitDist[10];
   int32_t AdasisSpeedLimitValues[10]; /* 0 means unknown */
-  int32_t NrTrfLights; /* Only first traffic ligh is described if available */
+  int32_t NrTrfLights; /* Only first traffic light is described if available */
   double TrfLightDist;
   int32_t TrfLightCurrState; /* 1 = Green, 2 = Yellow, 3 = Red, 0 = Flashing */
   double TrfLightFirstTimeToChange;

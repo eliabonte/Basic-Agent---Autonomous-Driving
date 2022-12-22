@@ -95,13 +95,13 @@ int main(int argc, const char * argv[]) {
 
 
             // ADD AGENT CODE HERE
-            double v0, a0, lookahead, vr, Ts, v_min, xs, Tp, xf, x_stop;
+            double v0, a0, lookahead, v_max_possible, Ts, v_min_possible, xs, Tp, xf, x_stop;
             double T_green, T_red;
 
 
             double optimalVel;
             double optimalTime; //FreeFlow function
-            double *coeff_T1, *coeff_T2, optimalVel_T1, optimalTime_T1, optimalVel_T2, optimalTime_T2; //Passing Primitive
+            double *coeff_T1, *coeff_T2, vmin_passing, optimalTime_T1, vmax_passing, optimalTime_T2; //Passing Primitive
             double max_xStop, T_stop; //StopPrimitive
             double vf_j0, tf_j0; //PassPrimitive_j0
 
@@ -119,21 +119,22 @@ int main(int argc, const char * argv[]) {
             double l2 = v0*v0;
 
             lookahead = MAX(MAX(50,l1),MAX(50,l2));
-            vr = MIN(in->RequestedCruisingSpeed, 30);
+            printLogVar(message_id, "Sensor RequestedCruisingSpeed", in->RequestedCruisingSpeed);
+            v_max_possible = MIN(in->RequestedCruisingSpeed, 20);
             Ts = 0.5; //time safety margin to pass the traffic light
 
-            v_min = 5; //lower velocity
+            v_min_possible = 5; //lower velocity
 
 
 
 
-            //using Ts and considering the higher velocity vr we obtain a safety space xs
-            xs = vr*Ts; //safety space to pass
+            //using Ts and considering the higher velocity v_max_possible we obtain a safety space xs
+            xs = v_max_possible * Ts; //safety space to pass
 
 
-            //considering the lower velocity v_min and xs we get a time;
+            //considering the lower velocity v_min_possible and xs we get a time;
             //we want to be at the traffic light within the safety margin of time
-            Tp = xs/v_min; //time in which we need to pass through xs with min speed
+            Tp = xs / v_min_possible; //time in which we need to pass through xs with min speed
 
 
             if(in->NrTrfLights != 0){
@@ -141,12 +142,14 @@ int main(int argc, const char * argv[]) {
                 x_stop = in->TrfLightDist - xs/2;
             }
 
-            printLogVar(message_id, "lookahead", lookahead);
+            printLogVar(message_id, "Xf", xf);
+            printLogVar(message_id, "Number of Traffic Light", in->NrTrfLights);
 
             if(in->NrTrfLights == 0 || xf >= lookahead){
-                FreeFlow(v0, a0, xf, vr, bestCoeff, &optimalVel, &optimalTime);
+                FreeFlow(v0, a0, xf, v_max_possible, bestCoeff, &optimalVel, &optimalTime);
             }
             else{
+                printLogVar(message_id, "CONTROLLO CHE CAZZO DEVO FARE!!", xf);
                 switch (in->TrfLightCurrState) {
                     case 1:
                         T_green = 0;
@@ -162,12 +165,12 @@ int main(int argc, const char * argv[]) {
                         break;
                 }
                 if(in->TrfLightCurrState == 1 && in->TrfLightDist <= xs){
-                    FreeFlow(v0, a0, xf, vr, bestCoeff, &optimalVel, &optimalTime);
+                    FreeFlow(v0, a0, xf, v_max_possible, bestCoeff, &optimalVel, &optimalTime);
                 }
                 else{
-                    PassPrimitive(v0, a0, xf, v_min, vr, T_green, T_red-Ts-Tp,
-                                  coeff_T2, &optimalTime_T2, &optimalVel_T2,
-                                  coeff_T1, &optimalTime_T1, &optimalVel_T1);
+                    PassPrimitive(v0, a0, xf, v_min_possible, v_max_possible, T_green, T_red - Ts - Tp,
+                                  coeff_T2, &optimalTime_T2, &vmax_passing,
+                                  coeff_T1, &optimalTime_T1, &vmin_passing);
 
                     if(check_array_null(coeff_T1, 6) && check_array_null(coeff_T1, 6)){
                         StopPrimitive(v0, a0, x_stop,
@@ -175,7 +178,7 @@ int main(int argc, const char * argv[]) {
                     }
                     else{
                         if((coeff_T1[3] < 0 && coeff_T2[3] > 0) || (coeff_T1[3] > 0 && coeff_T2[3] < 0)){
-                            PassPrimitive_j0(v0, a0, xf, v_min, vr, bestCoeff, &vf_j0, &tf_j0);
+                            PassPrimitive_j0(v0, a0, xf, v_min_possible, v_max_possible, bestCoeff, &vf_j0, &tf_j0);
                         }
                         else{
                             if(abs(coeff_T1[3]) < abs(coeff_T2[3])){
@@ -231,6 +234,8 @@ int main(int argc, const char * argv[]) {
             logger.write_line("Example");
 
             // Screen print
+            printLogVar(message_id, "lookahead", lookahead);
+            printLogVar(message_id, "Traffic Light Current State:", in->TrfLightCurrState);
             printLogVar(message_id, "Time", num_seconds);
             printLogVar(message_id, "Status", in->Status);
             printLogVar(message_id, "CycleNumber", in->CycleNumber);
