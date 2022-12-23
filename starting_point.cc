@@ -93,7 +93,7 @@ int main(int argc, const char * argv[]) {
             // ADD AGENT CODE HERE
             double v0, a0, lookahead, v_max_possible, Ts, v_min_possible, xs, Tp, xf, x_stop;
             double T_green, T_red;
-
+            bool flag_forced_stop = false;
 
             double optimalVel;
             double *coeff_FreeFlow, optimalTime; //FreeFlow function
@@ -112,6 +112,8 @@ int main(int argc, const char * argv[]) {
 
             v0 = in->VLgtFild;
             a0 = in->ALgtFild;
+            logger.log_var("data", "a", in->ALgtFild);
+            logger.log_var("data", "v", in->VLgtFild);
 
             double l1 = v0*10;
             double l2 = v0*v0;
@@ -137,12 +139,19 @@ int main(int argc, const char * argv[]) {
             if(in->NrTrfLights != 0){
                 xf = in->TrfLightDist - xs;
                 x_stop = in->TrfLightDist - xs/2;
+                if(xf < 0 && in->TrfLightCurrState != 1){
+                    xf = 0.2;
+                }
+                if(x_stop < 0 && in->TrfLightCurrState != 1){
+                    x_stop = 0.1;
+                }
             }
 
             printLogTitle(message_id, "INFO DISTANCES");
             printLogVar(message_id, "Traffic Light Distance", in->TrfLightDist);
             printLogVar(message_id, "xs", xs);
             printLogVar(message_id, "Xf", xf);
+            logger.log_var("data", "X_tf", in->TrfLightDist);
 
             if(in->NrTrfLights == 0 || xf >= lookahead){
                 FreeFlow(v0, a0, xf, v_max_possible, coeff_FreeFlow, &optimalVel, &optimalTime);
@@ -167,45 +176,62 @@ int main(int argc, const char * argv[]) {
                 printLogVar(message_id, "Current State Traffic Light", in->TrfLightCurrState);
                 printLogVar(message_id, "T_green", T_green);
                 printLogVar(message_id, "T_red", T_red);
-                if(in->TrfLightCurrState == 1 && in->TrfLightDist <= xs){
+                if(in->TrfLightCurrState == 1 && in->TrfLightDist <= xs/2){
                     v_max_possible = 15;
-                    FreeFlow(v0, a0, xf, v_max_possible, coeff_FreeFlow, &optimalVel, &optimalTime);
+                    FreeFlow(v0, a0, abs(xf), v_max_possible, coeff_FreeFlow, &optimalVel, &optimalTime);
                     bestCoeff = coeff_FreeFlow;
                     printLogTitle(message_id, "Best Coefficient - Free Flow");
                 }
                 else{
-                    PassPrimitive(v0, a0, xf, v_min_possible, v_max_possible, T_green, T_red - Ts - Tp,
-                                  coeff_T2, &optimalTime_T2, &vmax_passing,
-                                  coeff_T1, &optimalTime_T1, &vmin_passing);
-
-                    if(check_array_null(coeff_T1, 6) && check_array_null(coeff_T2, 6)){
+                    //if the traffic light is red and the car is coming with too much speed, I need to force the stop
+                    if(in->VLgtFild > 10 && in->TrfLightDist < 30 && in->TrfLightCurrState == 3){
                         StopPrimitive(v0, a0, x_stop,
                                       coeffStop, &max_xStop, &T_stop);
-                        if(coeffStop[3] < -1){
-                            StopPrimitive_j0(v0, a0,
-                                             coeffStop_j0, &sfj0, &tf_Stopj0);
-                            bestCoeff = coeffStop_j0;
-                            printLogTitle(message_id, "Best Coefficient - Stop Primitive j0");
-                        }
-                        else{
-                            bestCoeff = coeffStop;
-                            printLogTitle(message_id, "Best Coefficient - Stop Primitive");
-                        }
+                        bestCoeff = coeffStop;
+                        flag_forced_stop = true;
+                        printLogTitle(message_id, "Best Coefficient - (Forced) Stop Primitive");
+                    }
+                    //if the car is at the traffic light, that is red, it needs to remain still until the traffic light turns green
+                    else if(in->TrfLightDist <= xs/2 && in->TrfLightCurrState == 3){
+                        StopPrimitive(v0, a0, x_stop,
+                                      coeffStop, &max_xStop, &T_stop);
+                        bestCoeff = coeffStop;
+                        flag_forced_stop = true;
+                        printLogTitle(message_id, "Best Coefficient - (Forced) Stop Primitive");
                     }
                     else{
-                        if((coeff_T1[3]*coeff_T2[3]) < 0) {
-                            PassPrimitive_j0(v0, a0, xf, v_min_possible, v_max_possible, coeffPass_j0, &vf_j0, &tf_Passj0);
-                            bestCoeff = coeffPass_j0;
-                            printLogTitle(message_id, "Best Coefficient - Pass Primitive j0");
-                        }
-                        else{
-                            if(abs(coeff_T1[3]) < abs(coeff_T2[3])){
-                                bestCoeff = coeff_T1;
-                                printLogTitle(message_id, "Best Coefficient - Pass Primitive T1");
+                        PassPrimitive(v0, a0, xf, v_min_possible, v_max_possible, T_green, T_red - Ts - Tp,
+                                      coeff_T2, &optimalTime_T2, &vmax_passing,
+                                      coeff_T1, &optimalTime_T1, &vmin_passing);
+
+                        if(check_array_null(coeff_T1, 6) && check_array_null(coeff_T2, 6)){
+                            StopPrimitive(v0, a0, x_stop,
+                                          coeffStop, &max_xStop, &T_stop);
+                            if(coeffStop[3] < -1){
+                                StopPrimitive_j0(v0, a0,
+                                                 coeffStop_j0, &sfj0, &tf_Stopj0);
+                                bestCoeff = coeffStop_j0;
+                                printLogTitle(message_id, "Best Coefficient - Stop Primitive j0");
                             }
                             else{
-                                bestCoeff = coeff_T2;
-                                printLogTitle(message_id, "Best Coefficient - Pass Primitive T2");
+                                bestCoeff = coeffStop;
+                                printLogTitle(message_id, "Best Coefficient - Stop Primitive");
+                            }
+                        }
+                        else {
+                            if ((coeff_T1[3] * coeff_T2[3]) < 0) {
+                                PassPrimitive_j0(v0, a0, xf, v_min_possible, v_max_possible, coeffPass_j0, &vf_j0,
+                                                 &tf_Passj0);
+                                bestCoeff = coeffPass_j0;
+                                printLogTitle(message_id, "Best Coefficient - Pass Primitive j0");
+                            } else {
+                                if (abs(coeff_T1[3]) < abs(coeff_T2[3])) {
+                                    bestCoeff = coeff_T1;
+                                    printLogTitle(message_id, "Best Coefficient - Pass Primitive T1");
+                                } else {
+                                    bestCoeff = coeff_T2;
+                                    printLogTitle(message_id, "Best Coefficient - Pass Primitive T2");
+                                }
                             }
                         }
                     }
@@ -222,13 +248,10 @@ int main(int argc, const char * argv[]) {
             // ADD LOW LEVEL CONTROL CODE HERE
             static double old_req_acc = a0;
             double req_acc;
-
-
             double j_T_0 = bestCoeff[3]; //jEval(t=0,bestCoeff);
             double j_T_dt = bestCoeff[3] + (bestCoeff[4] * DT) + (0.5*bestCoeff[5]*DT*DT); //jEval(t=dt,bestCoeff);
             double j_int = DT*0.5*(j_T_0 + j_T_dt);
             req_acc = old_req_acc + j_int;
-
 
             //req_acc saturate
             if(req_acc > 1.5){
@@ -249,7 +272,13 @@ int main(int argc, const char * argv[]) {
             e_integral = e_integral + error*DT;
             double req_pedal = error*P_gain + e_integral * I_gain;
 
-            manoeuvre_msg.data_struct.RequestedAcc = req_pedal;
+            if(flag_forced_stop == true){
+                req_pedal = 0;
+                manoeuvre_msg.data_struct.RequestedAcc = req_pedal;
+            }else{
+                manoeuvre_msg.data_struct.RequestedAcc = req_pedal;
+            }
+
 
             if(v0 < 0.1 && old_req_acc < 0 && j_int > 0){
                 old_req_acc = 0;
@@ -258,20 +287,19 @@ int main(int argc, const char * argv[]) {
 
 
             //Save values in external file
-            logger.log_var("Example", "cycle", in->CycleNumber);
-            logger.log_var("Example", "time", num_seconds);
-            logger.log_var("Example", "v0", v0);
-            logger.log_var("Example", "a0", in->ALgtFild);
-            logger.log_var("Example", "req_acc", req_acc);
-            logger.log_var("Example", "coeff[3]", bestCoeff[3]);
-            logger.log_var("Example", "coeff[4]", bestCoeff[4]);
-            logger.log_var("Example", "coeff[5]", bestCoeff[5]);
+            logger.log_var("data", "cycle", in->CycleNumber);
+            logger.log_var("data", "time", num_seconds);
+            logger.log_var("data", "v0", v0);
+            logger.log_var("data", "req_acc", req_acc);
+            logger.log_var("data", "c3", bestCoeff[3]);
+            logger.log_var("data", "c4", bestCoeff[4]);
+            logger.log_var("data", "c5", bestCoeff[5]);
 
             // Write log
-            logger.write_line("Example");
+            logger.write_line("data");
 
             // Screen print
-            printLogVar(message_id, "Status", in->Status);
+            printLogVar(message_id, "Req pedal", req_pedal);
             printLogVar(message_id, "CycleNumber", in->CycleNumber);
 
             // Send manoeuvre message to the environment
