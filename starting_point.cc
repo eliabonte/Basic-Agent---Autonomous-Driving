@@ -88,10 +88,6 @@ int main(int argc, const char * argv[]) {
             manoeuvre_msg.data_struct.CycleNumber = in->CycleNumber;
             manoeuvre_msg.data_struct.Status = in->Status;
 
-            // Example of using log
-            logger.log_var("Example", "cycle", in->CycleNumber);
-            logger.log_var("Example", "v0", in->VLgtFild);
-            logger.log_var("Example", "a0", in->ALgtFild);
 
 
             // ADD AGENT CODE HERE
@@ -100,37 +96,38 @@ int main(int argc, const char * argv[]) {
 
 
             double optimalVel;
-            double optimalTime; //FreeFlow function
+            double *coeff_FreeFlow, optimalTime; //FreeFlow function
             double *coeff_T1, *coeff_T2, vmin_passing, optimalTime_T1, vmax_passing, optimalTime_T2; //Passing Primitive
-            double max_xStop, T_stop; //StopPrimitive
-            double vf_j0, tf_j0; //PassPrimitive_j0
+            double *coeffStop, max_xStop, T_stop; //StopPrimitive
+            double *coeffPass_j0, vf_j0, tf_Passj0; //PassPrimitive_j0
+            double *coeffStop_j0, sfj0, tf_Stopj0; //StopPrimitive_j0
 
+            auto *bestCoeff = (double*)malloc(6 * sizeof(double));
+            coeff_FreeFlow = (double*)malloc(6 * sizeof(double));
+            coeffStop = (double*)malloc(6 * sizeof(double));
+            coeff_T1 = (double*)malloc(6 * sizeof(double));
+            coeff_T2 = (double*)malloc(6 * sizeof(double));
+            coeffPass_j0 = (double*)malloc(6 * sizeof(double));
+            coeffStop_j0 = (double*)malloc(6 * sizeof(double));
 
             v0 = in->VLgtFild;
             a0 = in->ALgtFild;
-
-            auto *bestCoeff = (double*)malloc(6 * sizeof(double));
-
-
-            coeff_T1 = (double*)malloc(6 * sizeof(double));
-            coeff_T2 = (double*)malloc(6 * sizeof(double));
 
             double l1 = v0*10;
             double l2 = v0*v0;
 
             lookahead = MAX(MAX(50,l1),MAX(50,l2));
-            printLogVar(message_id, "Sensor RequestedCruisingSpeed", in->RequestedCruisingSpeed);
             v_max_possible = MIN(in->RequestedCruisingSpeed, 20);
+            printLogTitle(message_id, "INFO INITIAL STATE VARIABLES");
+            printLogVar(message_id, "v0", v0);
+            printLogVar(message_id, "a0", a0);
+            printLogVar(message_id, "vmax possible", v_max_possible);
             Ts = 0.5; //time safety margin to pass the traffic light
 
             v_min_possible = 5; //lower velocity
 
-
-
-
             //using Ts and considering the higher velocity v_max_possible we obtain a safety space xs
             xs = v_max_possible * Ts; //safety space to pass
-
 
             //considering the lower velocity v_min_possible and xs we get a time;
             //we want to be at the traffic light within the safety margin of time
@@ -142,14 +139,16 @@ int main(int argc, const char * argv[]) {
                 x_stop = in->TrfLightDist - xs/2;
             }
 
+            printLogTitle(message_id, "INFO DISTANCES");
+            printLogVar(message_id, "Traffic Light Distance", in->TrfLightDist);
+            printLogVar(message_id, "xs", xs);
             printLogVar(message_id, "Xf", xf);
-            printLogVar(message_id, "Number of Traffic Light", in->NrTrfLights);
 
             if(in->NrTrfLights == 0 || xf >= lookahead){
-                FreeFlow(v0, a0, xf, v_max_possible, bestCoeff, &optimalVel, &optimalTime);
+                FreeFlow(v0, a0, xf, v_max_possible, coeff_FreeFlow, &optimalVel, &optimalTime);
+                bestCoeff = coeff_FreeFlow;
             }
             else{
-                printLogVar(message_id, "CONTROLLO CHE CAZZO DEVO FARE!!", xf);
                 switch (in->TrfLightCurrState) {
                     case 1:
                         T_green = 0;
@@ -164,57 +163,85 @@ int main(int argc, const char * argv[]) {
                         T_red = in->TrfLightSecondTimeToChange;
                         break;
                 }
+                printLogTitle(message_id, "INFO TRAFFIC LIGHT");
+                printLogVar(message_id, "Current State Traffic Light", in->TrfLightCurrState);
+                printLogVar(message_id, "T_green", T_green);
+                printLogVar(message_id, "T_red", T_red);
                 if(in->TrfLightCurrState == 1 && in->TrfLightDist <= xs){
-                    FreeFlow(v0, a0, xf, v_max_possible, bestCoeff, &optimalVel, &optimalTime);
+                    v_max_possible = 15;
+                    FreeFlow(v0, a0, xf, v_max_possible, coeff_FreeFlow, &optimalVel, &optimalTime);
+                    bestCoeff = coeff_FreeFlow;
+                    printLogTitle(message_id, "Best Coefficient - Free Flow");
                 }
                 else{
                     PassPrimitive(v0, a0, xf, v_min_possible, v_max_possible, T_green, T_red - Ts - Tp,
                                   coeff_T2, &optimalTime_T2, &vmax_passing,
                                   coeff_T1, &optimalTime_T1, &vmin_passing);
 
-                    if(check_array_null(coeff_T1, 6) && check_array_null(coeff_T1, 6)){
+                    if(check_array_null(coeff_T1, 6) && check_array_null(coeff_T2, 6)){
                         StopPrimitive(v0, a0, x_stop,
-                                      bestCoeff, &max_xStop, &T_stop);
+                                      coeffStop, &max_xStop, &T_stop);
+                        if(coeffStop[3] < -1){
+                            StopPrimitive_j0(v0, a0,
+                                             coeffStop_j0, &sfj0, &tf_Stopj0);
+                            bestCoeff = coeffStop_j0;
+                            printLogTitle(message_id, "Best Coefficient - Stop Primitive j0");
+                        }
+                        else{
+                            bestCoeff = coeffStop;
+                            printLogTitle(message_id, "Best Coefficient - Stop Primitive");
+                        }
                     }
                     else{
-                        if((coeff_T1[3] < 0 && coeff_T2[3] > 0) || (coeff_T1[3] > 0 && coeff_T2[3] < 0)){
-                            PassPrimitive_j0(v0, a0, xf, v_min_possible, v_max_possible, bestCoeff, &vf_j0, &tf_j0);
+                        if((coeff_T1[3]*coeff_T2[3]) < 0) {
+                            PassPrimitive_j0(v0, a0, xf, v_min_possible, v_max_possible, coeffPass_j0, &vf_j0, &tf_Passj0);
+                            bestCoeff = coeffPass_j0;
+                            printLogTitle(message_id, "Best Coefficient - Pass Primitive j0");
                         }
                         else{
                             if(abs(coeff_T1[3]) < abs(coeff_T2[3])){
                                 bestCoeff = coeff_T1;
+                                printLogTitle(message_id, "Best Coefficient - Pass Primitive T1");
                             }
                             else{
                                 bestCoeff = coeff_T2;
+                                printLogTitle(message_id, "Best Coefficient - Pass Primitive T2");
                             }
                         }
                     }
                 }
             }
 
-
+            printLogVar(message_id, "v0", bestCoeff[1]);
+            printLogVar(message_id, "a0", bestCoeff[2]);
+            printLogVar(message_id, "bestCoeff[3]", bestCoeff[3]);
+            printLogVar(message_id, "bestCoeff[4]", bestCoeff[4]);
+            printLogVar(message_id, "bestCoeff[5]", bestCoeff[5]);
 
 
             // ADD LOW LEVEL CONTROL CODE HERE
             static double old_req_acc = a0;
             double req_acc;
 
+
             double j_T_0 = bestCoeff[3]; //jEval(t=0,bestCoeff);
             double j_T_dt = bestCoeff[3] + (bestCoeff[4] * DT) + (0.5*bestCoeff[5]*DT*DT); //jEval(t=dt,bestCoeff);
             double j_int = DT*0.5*(j_T_0 + j_T_dt);
             req_acc = old_req_acc + j_int;
 
-            double optimalS = optimalVel*optimalTime;
-            double req_vel = v_opt(DT,v0,a0,optimalS,optimalVel,0,optimalTime);
 
+            //req_acc saturate
+            if(req_acc > 1.5){
+                req_acc = 1.5;
+            }
+            else if(req_acc < -1.5){
+                req_acc = -1.5;
+            }
 
-            req_acc = MIN( MAX(req_acc, -7.0), 7.0);
-
-            old_req_acc = req_acc; //update internal a0 variable
-
+            //save the old acceleration
+            old_req_acc = req_acc;
 
             //PID CONTROL
-
             double P_gain = 0.02;
             double I_gain = 1;
             static double e_integral = 0;
@@ -224,19 +251,26 @@ int main(int argc, const char * argv[]) {
 
             manoeuvre_msg.data_struct.RequestedAcc = req_pedal;
 
-
             if(v0 < 0.1 && old_req_acc < 0 && j_int > 0){
                 old_req_acc = 0;
                 e_integral = 0;
             }
 
+
+            //Save values in external file
+            logger.log_var("Example", "cycle", in->CycleNumber);
+            logger.log_var("Example", "time", num_seconds);
+            logger.log_var("Example", "v0", v0);
+            logger.log_var("Example", "a0", in->ALgtFild);
+            logger.log_var("Example", "req_acc", req_acc);
+            logger.log_var("Example", "coeff[3]", bestCoeff[3]);
+            logger.log_var("Example", "coeff[4]", bestCoeff[4]);
+            logger.log_var("Example", "coeff[5]", bestCoeff[5]);
+
             // Write log
             logger.write_line("Example");
 
             // Screen print
-            printLogVar(message_id, "lookahead", lookahead);
-            printLogVar(message_id, "Traffic Light Current State:", in->TrfLightCurrState);
-            printLogVar(message_id, "Time", num_seconds);
             printLogVar(message_id, "Status", in->Status);
             printLogVar(message_id, "CycleNumber", in->CycleNumber);
 
